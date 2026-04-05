@@ -361,10 +361,10 @@ function renderParsed(parsed) {
     }
 
     if (value.type === "text") {
-      return `<div class="parsed-line"><strong>${key}</strong>: ${value.raw} <span style="color:#777;">(${typeLabel})</span></div>`;
+      return `<div class="parsed-line"><strong>${key}</strong>: ${value.raw} <span class="parsed-type">(${typeLabel})</span></div>`;
     }
 
-    return `<div class="parsed-line"><strong>${key}</strong>: ${value.raw} <span style="color:#777;">(${typeLabel} / min ${value.min}, max ${value.max})</span></div>`;
+    return `<div class="parsed-line"><strong>${key}</strong>: ${value.raw} <span class="parsed-type">(${typeLabel} / min ${value.min}, max ${value.max})</span></div>`;
   }).join("");
 
   return lines || '<div class="parsed-line">읽힌 항목이 없다.</div>';
@@ -446,11 +446,21 @@ function setDisplayMode(mode) {
   }
 
   if (latestRenderData && resultArea) {
-    const { character, target, results } = latestRenderData;
+    const { character, target } = latestRenderData;
     const refreshedResults = compareBlocks(character, target);
     latestRenderData = { character, target, results: refreshedResults };
     resultArea.innerHTML = renderResults(character, target, refreshedResults);
   }
+}
+
+function applyTheme(theme) {
+  document.body.classList.toggle("dark-mode", theme === "dark");
+
+  if (themeToggleBtn) {
+    themeToggleBtn.innerText = theme === "dark" ? "일반모드" : "다크모드";
+  }
+
+  localStorage.setItem("theme", theme);
 }
 
 const characterInput = document.getElementById("characterInput");
@@ -460,6 +470,17 @@ const sampleBtn = document.getElementById("sampleBtn");
 const clearBtn = document.getElementById("clearBtn");
 const valueModeBtn = document.getElementById("valueModeBtn");
 const percentModeBtn = document.getElementById("percentModeBtn");
+const themeToggleBtn = document.getElementById("themeToggleBtn");
+
+const savedTheme = localStorage.getItem("theme") || "light";
+applyTheme(savedTheme);
+
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener("click", () => {
+    const nextTheme = document.body.classList.contains("dark-mode") ? "light" : "dark";
+    applyTheme(nextTheme);
+  });
+}
 
 if (valueModeBtn) {
   valueModeBtn.addEventListener("click", () => {
