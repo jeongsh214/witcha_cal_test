@@ -163,14 +163,19 @@ button {
   white-space: nowrap;
 }
 
-.ok {
-  background: #e9f9ef;
-  color: #1d7c41;
+.over {
+  background: #e8f0ff;
+  color: #2f6fff; /* 파랑 */
 }
 
-.fail {
-  background: #fff1f1;
-  color: #c83b3b;
+.under {
+  background: #ffecec;
+  color: #d93025; /* 빨강 */
+}
+
+.equal {
+  background: #e8f9ef;
+  color: #1d7c41; /* 초록 */
 }
 
 .warn {

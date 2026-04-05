@@ -98,6 +98,54 @@ function parseBlock(text) {
   return parsed;
 }
 
+function parseCsvLine(line) {
+  return line.split(",").map(v => v.trim());
+}
+
+function parseCsvText(csvText) {
+  const lines = csvText
+    .split("\n")
+    .map(line => line.replace(/\r/g, "").trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return {};
+  }
+
+  const headers = parseCsvLine(lines[0]);
+  const result = {};
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    const grade = cols[0];
+
+    if (!grade) continue;
+
+    result[grade] = {};
+
+    for (let j = 1; j < headers.length; j++) {
+      const key = normalizeKey(headers[j]);
+      const value = cols[j] ?? "";
+
+      if (value === "") continue;
+      result[grade][key] = parseValue(value);
+    }
+  }
+
+  return result;
+}
+
+async function loadTargetStats() {
+  const response = await fetch("./target-stats.csv");
+
+  if (!response.ok) {
+    throw new Error("target-stats.csv 파일을 불러오지 못했다.");
+  }
+
+  const csvText = await response.text();
+  return parseCsvText(csvText);
+}
+
 function compareTextStat(name, charStat, targetStat) {
   const same = charStat.raw === targetStat.raw;
 
@@ -109,35 +157,82 @@ function compareTextStat(name, charStat, targetStat) {
   };
 }
 
+function compareFixedVsRange(name, charStat, targetStat) {
+  const target = targetStat.min;
+  const minOk = charStat.min >= target;
+  const maxOk = charStat.max >= target;
+
+  let label = "충족";
+  let status = "pass";
+  let detail = `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`;
+
+  if (!minOk && !maxOk) {
+    label = "부족";
+    status = "fail";
+    detail += ` / 최소값 ${target - charStat.min} 부족, 최대값 ${target - charStat.max} 부족`;
+  } else if (!minOk && maxOk) {
+    label = "부분 충족";
+    status = "warn";
+    detail += ` / 최소값 ${target - charStat.min} 부족, 최대값은 충족`;
+  }
+
+  return {
+    name,
+    status,
+    label,
+    detail
+  };
+}
+
 function compareNumberStat(name, charStat, targetStat) {
   const cMin = charStat.min;
   const cMax = charStat.max;
   const tMin = targetStat.min;
   const tMax = targetStat.max;
 
+  // 단일값 vs 단일값
   if (charStat.type === "fixed" && targetStat.type === "fixed") {
     const diff = cMin - tMin;
-    const direction = diff === 0 ? "동일" : diff > 0 ? `${diff} 상회` : `${Math.abs(diff)} 미달`;
+
+    let label = "동일";
+    let status = "equal";
+
+    if (diff > 0) {
+      label = `${diff} 초과`;
+      status = "over";
+    } else if (diff < 0) {
+      label = `${Math.abs(diff)} 미달`;
+      status = "under";
+    }
 
     return {
       name,
-      status: diff >= 0 ? "pass" : "fail",
-      label: direction,
-      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw} / ${direction}`
+      status,
+      label,
+      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw} / ${label}`
     };
   }
 
+  // 범위 vs 단일값
   if (charStat.type === "range" && targetStat.type === "fixed") {
     const minDiff = cMin - tMin;
     const maxDiff = cMax - tMin;
 
-    const minText = minDiff === 0 ? "최소값 동일" : minDiff > 0 ? `최소값 ${minDiff} 상회` : `최소값 ${Math.abs(minDiff)} 미달`;
-    const maxText = maxDiff === 0 ? "최대값 동일" : maxDiff > 0 ? `최대값 ${maxDiff} 상회` : `최대값 ${Math.abs(maxDiff)} 미달`;
+    const minText = minDiff === 0
+      ? "최소 동일"
+      : minDiff > 0
+        ? `최소 ${minDiff} 초과`
+        : `최소 ${Math.abs(minDiff)} 미달`;
 
-    let status = "pass";
-    if (minDiff < 0 || maxDiff < 0) {
-      status = "fail";
-    }
+    const maxText = maxDiff === 0
+      ? "최대 동일"
+      : maxDiff > 0
+        ? `최대 ${maxDiff} 초과`
+        : `최대 ${Math.abs(maxDiff)} 미달`;
+
+    let status = "equal";
+    if (minDiff < 0 || maxDiff < 0) status = "under";
+    else if (minDiff > 0 || maxDiff > 0) status = "over";
 
     return {
       name,
@@ -147,16 +242,25 @@ function compareNumberStat(name, charStat, targetStat) {
     };
   }
 
+  // 범위 vs 범위 (확장 대비)
   const minDiff = cMin - tMin;
   const maxDiff = cMax - tMax;
 
-  const minText = minDiff === 0 ? "최소값 동일" : minDiff > 0 ? `최소값 ${minDiff} 상회` : `최소값 ${Math.abs(minDiff)} 미달`;
-  const maxText = maxDiff === 0 ? "최대값 동일" : maxDiff > 0 ? `최대값 ${maxDiff} 상회` : `최대값 ${Math.abs(maxDiff)} 미달`;
+  const minText = minDiff === 0
+    ? "최소 동일"
+    : minDiff > 0
+      ? `최소 ${minDiff} 초과`
+      : `최소 ${Math.abs(minDiff)} 미달`;
 
-  let status = "pass";
-  if (minDiff < 0 || maxDiff < 0) {
-    status = "fail";
-  }
+  const maxText = maxDiff === 0
+    ? "최대 동일"
+    : maxDiff > 0
+      ? `최대 ${maxDiff} 초과`
+      : `최대 ${Math.abs(maxDiff)} 미달`;
+
+  let status = "equal";
+  if (minDiff < 0 || maxDiff < 0) status = "under";
+  else if (minDiff > 0 || maxDiff > 0) status = "over";
 
   return {
     name,
@@ -192,7 +296,7 @@ function compareBlocks(character, target) {
         name: key,
         status: "warn",
         label: "기준 누락",
-        detail: `기준 입력에 ${key} 항목이 없다.`
+        detail: `기준 CSV에 ${key} 항목이 없다.`
       });
       return;
     }
@@ -209,14 +313,9 @@ function compareBlocks(character, target) {
 }
 
 function getBadgeClass(status) {
-  if (status === "pass" || status === "match") {
-    return "badge ok";
-  }
-
-  if (status === "fail" || status === "mismatch") {
-    return "badge fail";
-  }
-
+  if (status === "over") return "badge over";
+  if (status === "under") return "badge under";
+  if (status === "equal") return "badge equal";
   return "badge warn";
 }
 
@@ -260,15 +359,15 @@ function renderResults(character, target, results) {
   return `
     <div class="summary">
       <div class="mini-box">
-        <div class="mini-label">기준 이상 / 일치</div>
+        <div class="mini-label">충족 / 일치</div>
         <div class="mini-value">${passCount}</div>
       </div>
       <div class="mini-box">
-        <div class="mini-label">기준 미달 / 불일치</div>
+        <div class="mini-label">부족 / 불일치</div>
         <div class="mini-value">${failCount}</div>
       </div>
       <div class="mini-box">
-        <div class="mini-label">누락 / 확인 필요</div>
+        <div class="mini-label">부분 충족 / 누락</div>
         <div class="mini-value">${warnCount}</div>
       </div>
     </div>
@@ -289,19 +388,43 @@ function renderResults(character, target, results) {
   `;
 }
 
+function getCharacterGrade(character) {
+  const gradeField = character.fields["등급"];
+  return gradeField ? gradeField.raw : "";
+}
+
 const characterInput = document.getElementById("characterInput");
-const targetInput = document.getElementById("targetInput");
 const resultArea = document.getElementById("resultArea");
 const compareBtn = document.getElementById("compareBtn");
 const sampleBtn = document.getElementById("sampleBtn");
 const clearBtn = document.getElementById("clearBtn");
 
-compareBtn.addEventListener("click", () => {
-  const character = parseBlock(characterInput.value);
-  const target = parseBlock(targetInput.value);
-  const results = compareBlocks(character, target);
+compareBtn.addEventListener("click", async () => {
+  try {
+    const allTargetStats = await loadTargetStats();
+    const character = parseBlock(characterInput.value);
+    const grade = getCharacterGrade(character);
 
-  resultArea.innerHTML = renderResults(character, target, results);
+    if (!grade) {
+      resultArea.innerHTML = '<div class="empty">입력값에서 등급 항목을 찾지 못했다.</div>';
+      return;
+    }
+
+    if (!allTargetStats[grade]) {
+      resultArea.innerHTML = `<div class="empty">CSV에서 "${grade}" 등급 기준을 찾지 못했다.</div>`;
+      return;
+    }
+
+    const target = {
+      title: `${grade} 기준 스탯`,
+      fields: allTargetStats[grade]
+    };
+
+    const results = compareBlocks(character, target);
+    resultArea.innerHTML = renderResults(character, target, results);
+  } catch (error) {
+    resultArea.innerHTML = `<div class="empty">${error.message}</div>`;
+  }
 });
 
 sampleBtn.addEventListener("click", () => {
@@ -314,20 +437,10 @@ sampleBtn.addEventListener("click", () => {
 명중률\t100
 민첩\t4~7`;
 
-  targetInput.value = `기준 스텟
-등급\t차원표류
-체력\t300
-공격력\t30
-방어력\t10
-치명타 확률\t12
-명중률\t100
-민첩\t5~7`;
-
   resultArea.innerHTML = '<div class="empty">샘플을 넣었다. 비교하기를 누르면 결과가 나온다.</div>';
 });
 
 clearBtn.addEventListener("click", () => {
   characterInput.value = "";
-  targetInput.value = "";
   resultArea.innerHTML = '<div class="empty">입력창을 비웠다.</div>';
 });
