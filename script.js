@@ -1,3 +1,6 @@
+let displayMode = "value";
+let latestRenderData = null;
+
 function normalizeKey(key) {
   return String(key).replace(/\s+/g, " ").trim();
 }
@@ -158,7 +161,20 @@ async function loadTargetStats() {
   return parseCsvText(csvText);
 }
 
-function makePart(title, diff, fixedLabel) {
+function formatDiff(diff, baseValue) {
+  if (displayMode === "percent") {
+    if (!baseValue) {
+      return "0%";
+    }
+
+    const percent = Math.round((Math.abs(diff) / baseValue) * 100);
+    return `${percent}%`;
+  }
+
+  return String(Math.abs(diff));
+}
+
+function makePart(title, diff, fixedLabel, baseValue) {
   if (fixedLabel !== undefined) {
     return {
       title,
@@ -167,10 +183,12 @@ function makePart(title, diff, fixedLabel) {
     };
   }
 
+  const amount = formatDiff(diff, baseValue);
+
   if (diff > 0) {
     return {
       title,
-      text: `${diff} 초과`,
+      text: `${amount} 초과`,
       className: "over"
     };
   }
@@ -178,7 +196,7 @@ function makePart(title, diff, fixedLabel) {
   if (diff < 0) {
     return {
       title,
-      text: `${Math.abs(diff)} 미달`,
+      text: `${amount} 미달`,
       className: "under"
     };
   }
@@ -210,7 +228,7 @@ function compareNumberStat(name, charStat, targetStat) {
   const tMax = targetStat.max;
 
   if (charStat.type === "fixed" && targetStat.type === "fixed") {
-    const valuePart = makePart("값", cMin - tMin);
+    const valuePart = makePart("값", cMin - tMin, undefined, tMin);
 
     return {
       name,
@@ -221,8 +239,8 @@ function compareNumberStat(name, charStat, targetStat) {
   }
 
   if (charStat.type === "range" && targetStat.type === "fixed") {
-    const minPart = makePart("최소", cMin - tMin);
-    const maxPart = makePart("최대", cMax - tMin);
+    const minPart = makePart("최소", cMin - tMin, undefined, tMin);
+    const maxPart = makePart("최대", cMax - tMin, undefined, tMin);
 
     let status = "equal";
     if (minPart.className === "under" || maxPart.className === "under") {
@@ -240,8 +258,8 @@ function compareNumberStat(name, charStat, targetStat) {
   }
 
   if (charStat.type === "fixed" && targetStat.type === "range") {
-    const minPart = makePart("기준 최소 대비", cMin - tMin);
-    const maxPart = makePart("기준 최대 대비", cMin - tMax);
+    const minPart = makePart("기준 최소 대비", cMin - tMin, undefined, tMin);
+    const maxPart = makePart("기준 최대 대비", cMin - tMax, undefined, tMax);
 
     let status = "equal";
     if (minPart.className === "under" || maxPart.className === "under") {
@@ -258,8 +276,8 @@ function compareNumberStat(name, charStat, targetStat) {
     };
   }
 
-  const minPart = makePart("최소", cMin - tMin);
-  const maxPart = makePart("최대", cMax - tMax);
+  const minPart = makePart("최소", cMin - tMin, undefined, tMin);
+  const maxPart = makePart("최대", cMax - tMax, undefined, tMax);
 
   let status = "equal";
   if (minPart.className === "under" || maxPart.className === "under") {
@@ -400,6 +418,7 @@ function renderResults(character, target, results) {
     <div class="meta">
       <div class="tag">캐릭터 제목: ${character.title || "없음"}</div>
       <div class="tag">기준 제목: ${target.title || "없음"}</div>
+      <div class="tag">표시 방식: ${displayMode === "percent" ? "%" : "수치"}</div>
     </div>
 
     <div class="section-title">비교 상세</div>
@@ -418,11 +437,41 @@ function getCharacterGrade(character) {
   return gradeField ? String(gradeField.raw).trim() : "";
 }
 
+function setDisplayMode(mode) {
+  displayMode = mode;
+
+  if (valueModeBtn && percentModeBtn) {
+    valueModeBtn.classList.toggle("active", mode === "value");
+    percentModeBtn.classList.toggle("active", mode === "percent");
+  }
+
+  if (latestRenderData && resultArea) {
+    const { character, target, results } = latestRenderData;
+    const refreshedResults = compareBlocks(character, target);
+    latestRenderData = { character, target, results: refreshedResults };
+    resultArea.innerHTML = renderResults(character, target, refreshedResults);
+  }
+}
+
 const characterInput = document.getElementById("characterInput");
 const resultArea = document.getElementById("resultArea");
 const compareBtn = document.getElementById("compareBtn");
 const sampleBtn = document.getElementById("sampleBtn");
 const clearBtn = document.getElementById("clearBtn");
+const valueModeBtn = document.getElementById("valueModeBtn");
+const percentModeBtn = document.getElementById("percentModeBtn");
+
+if (valueModeBtn) {
+  valueModeBtn.addEventListener("click", () => {
+    setDisplayMode("value");
+  });
+}
+
+if (percentModeBtn) {
+  percentModeBtn.addEventListener("click", () => {
+    setDisplayMode("percent");
+  });
+}
 
 if (compareBtn) {
   compareBtn.addEventListener("click", async () => {
@@ -433,6 +482,7 @@ if (compareBtn) {
       const grade = getCharacterGrade(character);
 
       if (!grade) {
+        latestRenderData = null;
         resultArea.innerHTML = '<div class="empty">입력값에서 등급 항목을 찾지 못했다.</div>';
         return;
       }
@@ -441,13 +491,16 @@ if (compareBtn) {
       const target = allTargets[grade];
 
       if (!target) {
+        latestRenderData = null;
         resultArea.innerHTML = `<div class="empty">기준 CSV에서 "${grade}" 등급을 찾지 못했다.</div>`;
         return;
       }
 
       const results = compareBlocks(character, target);
+      latestRenderData = { character, target, results };
       resultArea.innerHTML = renderResults(character, target, results);
     } catch (error) {
+      latestRenderData = null;
       resultArea.innerHTML = `<div class="empty">${error.message}</div>`;
     }
   });
@@ -466,6 +519,7 @@ if (sampleBtn) {
 명중률\t100
 민첩\t4~7`;
 
+    latestRenderData = null;
     resultArea.innerHTML = '<div class="empty">샘플을 넣었다. 비교하기를 누르면 결과가 나온다.</div>';
   });
 }
@@ -475,6 +529,7 @@ if (clearBtn) {
     if (!characterInput || !resultArea) return;
 
     characterInput.value = "";
+    latestRenderData = null;
     resultArea.innerHTML = '<div class="empty">입력창을 비웠다.</div>';
   });
 }

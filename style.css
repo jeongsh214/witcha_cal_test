@@ -44,6 +44,42 @@ h1 {
   font-size: 22px;
 }
 
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.result-header h2 {
+  margin: 0;
+}
+
+.display-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toggle-btn {
+  border: 1px solid #d8deea;
+  background: #fff;
+  color: #444;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toggle-btn.active {
+  background: #2f6fff;
+  border-color: #2f6fff;
+  color: #fff;
+}
+
 textarea {
   width: 100%;
   min-height: 260px;
