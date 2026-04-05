@@ -156,6 +156,9 @@ button {
 }
 
 .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 13px;
@@ -183,14 +186,23 @@ button {
   color: #9a6a00;
 }
 
-.text-match {
-  background: #e8f9ef;
-  color: #1d7c41;
+.compare-parts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 
-.text-mismatch {
-  background: #ffecec;
-  color: #d93025;
+.compare-part {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-part-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #555;
 }
 
 .stat-detail {
@@ -238,23 +250,4 @@ button {
   .summary {
     grid-template-columns: 1fr;
   }
-}
-
-.compare-parts {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-
-.compare-part {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.compare-part-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #555;
 }
