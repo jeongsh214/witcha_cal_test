@@ -239,3 +239,22 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+.compare-parts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.compare-part {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-part-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #555;
+}

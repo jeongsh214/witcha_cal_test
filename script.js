@@ -151,9 +151,15 @@ function compareTextStat(name, charStat, targetStat) {
 
   return {
     name,
-    status: same ? "text-match" : "text-mismatch",
-    label: same ? "동일" : "불일치",
-    detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`
+    status: same ? "match" : "mismatch",
+    detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`,
+    parts: [
+      {
+        title: "값",
+        text: same ? "동일" : "불일치",
+        className: same ? "equal" : "under"
+      }
+    ]
   };
 }
 
@@ -274,83 +280,92 @@ function compareNumberStat(name, charStat, targetStat) {
   const tMin = targetStat.min;
   const tMax = targetStat.max;
 
+  function getDiffInfo(diff) {
+    if (diff > 0) {
+      return { text: `${diff} 초과`, className: "over" };
+    }
+    if (diff < 0) {
+      return { text: `${Math.abs(diff)} 미달`, className: "under" };
+    }
+    return { text: "동일", className: "equal" };
+  }
+
   // 단일 vs 단일
   if (charStat.type === "fixed" && targetStat.type === "fixed") {
-    const diff = cMin - tMin;
-
-    let label = "동일";
-    let status = "equal";
-
-    if (diff > 0) {
-      label = `${diff} 초과`;
-      status = "over";
-    } else if (diff < 0) {
-      label = `${Math.abs(diff)} 미달`;
-      status = "under";
-    }
+    const info = getDiffInfo(cMin - tMin);
 
     return {
       name,
-      status,
-      label,
-      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`
+      status: info.className,
+      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`,
+      parts: [
+        {
+          title: "값",
+          text: info.text,
+          className: info.className
+        }
+      ]
     };
   }
 
   // 범위 vs 단일
   if (charStat.type === "range" && targetStat.type === "fixed") {
-    const minDiff = cMin - tMin;
-    const maxDiff = cMax - tMin;
-
-    const minLabel = minDiff === 0
-      ? "동일"
-      : minDiff > 0
-        ? `${minDiff} 초과`
-        : `${Math.abs(minDiff)} 미달`;
-
-    const maxLabel = maxDiff === 0
-      ? "동일"
-      : maxDiff > 0
-        ? `${maxDiff} 초과`
-        : `${Math.abs(maxDiff)} 미달`;
+    const minInfo = getDiffInfo(cMin - tMin);
+    const maxInfo = getDiffInfo(cMax - tMin);
 
     let status = "equal";
-    if (minDiff < 0 || maxDiff < 0) status = "under";
-    else if (minDiff > 0 || maxDiff > 0) status = "over";
+    if (minInfo.className === "under" || maxInfo.className === "under") {
+      status = "under";
+    } else if (minInfo.className === "over" || maxInfo.className === "over") {
+      status = "over";
+    }
 
     return {
       name,
       status,
-      label: `최소: ${minLabel} | 최대: ${maxLabel}`,
-      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`
+      detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`,
+      parts: [
+        {
+          title: "최소",
+          text: minInfo.text,
+          className: minInfo.className
+        },
+        {
+          title: "최대",
+          text: maxInfo.text,
+          className: maxInfo.className
+        }
+      ]
     };
   }
 
   // 범위 vs 범위
-  const minDiff = cMin - tMin;
-  const maxDiff = cMax - tMax;
-
-  const minLabel = minDiff === 0
-    ? "동일"
-    : minDiff > 0
-      ? `${minDiff} 초과`
-      : `${Math.abs(minDiff)} 미달`;
-
-  const maxLabel = maxDiff === 0
-    ? "동일"
-    : maxDiff > 0
-      ? `${maxDiff} 초과`
-      : `${Math.abs(maxDiff)} 미달`;
+  const minInfo = getDiffInfo(cMin - tMin);
+  const maxInfo = getDiffInfo(cMax - tMax);
 
   let status = "equal";
-  if (minDiff < 0 || maxDiff < 0) status = "under";
-  else if (minDiff > 0 || maxDiff > 0) status = "over";
+  if (minInfo.className === "under" || maxInfo.className === "under") {
+    status = "under";
+  } else if (minInfo.className === "over" || maxInfo.className === "over") {
+    status = "over";
+  }
 
   return {
     name,
     status,
-    label: `최소: ${minLabel} | 최대: ${maxLabel}`,
-    detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`
+    detail: `캐릭터: ${charStat.raw} / 기준: ${targetStat.raw}`,
+    parts: [
+      {
+        title: "최소",
+        text: minInfo.text,
+        className: minInfo.className
+      },
+      {
+        title: "최대",
+        text: maxInfo.text,
+        className: maxInfo.className
+      }
+    ]
   };
 }
 
@@ -435,15 +450,24 @@ function renderResults(character, target, results) {
   const failCount = results.filter(r => r.status === "fail" || r.status === "mismatch").length;
   const warnCount = results.filter(r => r.status === "warn").length;
 
-  const resultHtml = results.map(item => `
+const resultHtml = results.map(item => {
+  const partsHtml = (item.parts || []).map(part => `
+    <div class="compare-part">
+      <div class="compare-part-title">${part.title}</div>
+      <div class="badge ${part.className}">${part.text}</div>
+    </div>
+  `).join("");
+
+  return `
     <div class="result-item">
       <div class="result-top">
         <div class="stat-name">${item.name}</div>
-        <div class="${getBadgeClass(item.status)}">${item.label}</div>
       </div>
+      <div class="compare-parts">${partsHtml}</div>
       <div class="stat-detail">${item.detail}</div>
     </div>
-  `).join("");
+  `;
+}).join("");
 
   return `
     <div class="summary">
