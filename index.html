@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>캐릭터 스탯 비교기</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>캐릭터 스탯 비교기</h1>
+    <p class="desc">
+      참가자가 보낸 텍스트를 그대로 붙여넣고, CSV에 저장된 기준 스탯과 비교한다.<br />
+      숫자는 고정값, <strong>~</strong>가 들어가면 범위값으로 해석한다.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>캐릭터 입력</h2>
+        <textarea id="characterInput">캐릭터 스텟
+등급	차원표류
+체력	310
+공격력	28
+방어력	8
+치명타 확률	15
+명중률	100
+민첩	4~7</textarea>
+
+        <div class="actions">
+          <button class="primary" id="compareBtn">비교하기</button>
+          <button class="secondary" id="sampleBtn">샘플 넣기</button>
+          <button class="secondary" id="clearBtn">초기화</button>
+        </div>
+
+        <div class="parsed-box">
+          <div class="section-title rules-title">CSV 파일명</div>
+          <div class="parsed-line"><strong>target-stats.csv</strong> 라는 이름으로 index.html과 같은 폴더에 넣어야 한다.</div>
+        </div>
+
+        <div class="parsed-box">
+          <div class="section-title rules-title">파싱 규칙</div>
+          <div class="parsed-line">- 줄마다 <strong>항목명 + 값</strong> 형식이면 읽는다.</div>
+          <div class="parsed-line">- 탭, 콜론(:), 여러 칸 공백을 구분자로 처리한다.</div>
+          <div class="parsed-line">- 숫자만 있으면 고정값으로 처리한다.</div>
+          <div class="parsed-line">- 예: <strong>4~7</strong> 은 최소 4, 최대 7로 처리한다.</div>
+          <div class="parsed-line">- 기준 CSV의 민첩은 <strong>5</strong> 같은 단일 숫자로 저장한다.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>비교 결과</h2>
+        <div id="resultArea">
+          <div class="empty">왼쪽에 캐릭터 스탯을 붙여넣고 비교하기를 누르면 결과가 나온다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
