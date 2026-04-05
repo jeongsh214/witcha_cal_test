@@ -554,3 +554,180 @@ if (clearBtn) {
     resultArea.innerHTML = '<div class="empty">입력창을 비웠다.</div>';
   });
 }
+const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbytO_68AEN8CeneRs-QOS0MSVR1mvZO04Hs7WaOm8q3ZtMVXd06bjtrB7qHCDxtbCgbRA/exec";
+
+const checklistBody = document.getElementById("checklistBody");
+const checklistStatus = document.getElementById("checklistStatus");
+const refreshCharactersBtn = document.getElementById("refreshCharactersBtn");
+const saveChecklistBtn = document.getElementById("saveChecklistBtn");
+
+function setChecklistStatus(message) {
+  if (checklistStatus) {
+    checklistStatus.textContent = message;
+  }
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderChecklist(names) {
+  if (!checklistBody) return;
+
+  if (!names || !names.length) {
+    checklistBody.innerHTML = `
+      <div class="checklist-row">
+        <div class="checklist-cell name-col">목록 없음</div>
+        <div class="checklist-cell check-col">-</div>
+        <div class="checklist-cell check-col">-</div>
+        <div class="checklist-cell check-col">-</div>
+      </div>
+    `;
+    return;
+  }
+
+  checklistBody.innerHTML = names.map((name, index) => `
+    <div class="checklist-row" data-row-index="${index}" data-name="${escapeHtml(name)}">
+      <div class="checklist-cell name-col">${escapeHtml(name)}</div>
+      <div class="checklist-cell check-col">
+        <input type="checkbox" name="status-${index}" value="승인" />
+      </div>
+      <div class="checklist-cell check-col">
+        <input type="checkbox" name="status-${index}" value="기각" />
+      </div>
+      <div class="checklist-cell check-col">
+        <input type="checkbox" name="status-${index}" value="보류" />
+      </div>
+    </div>
+  `).join("");
+}
+
+async function fetchCharacterNamesFromGas() {
+  if (!GAS_WEBAPP_URL || GAS_WEBAPP_URL === "YOUR_GAS_WEBAPP_URL") {
+    throw new Error("Apps Script 배포 URL을 먼저 넣어야 한다.");
+  }
+
+  const url = `${GAS_WEBAPP_URL}?action=characters&t=${Date.now()}`;
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error("목록 요청에 실패했다.");
+  }
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "목록을 가져오지 못했다.");
+  }
+
+  if (!Array.isArray(data.names)) {
+    throw new Error("응답 형식이 올바르지 않다.");
+  }
+
+  return data.names;
+}
+
+async function refreshCharacterChecklist() {
+  try {
+    setChecklistStatus("캐릭터 목록을 가져오는 중...");
+    if (refreshCharactersBtn) refreshCharactersBtn.disabled = true;
+
+    const names = await fetchCharacterNamesFromGas();
+    renderChecklist(names);
+    setChecklistStatus(`총 ${names.length}명 불러왔다.`);
+  } catch (error) {
+    renderChecklist([]);
+    setChecklistStatus(`오류: ${error.message}`);
+  } finally {
+    if (refreshCharactersBtn) refreshCharactersBtn.disabled = false;
+  }
+}
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+
+  if (!target.matches('#checklistBody input[type="checkbox"]')) return;
+
+  if (target.checked) {
+    const sameRow = document.querySelectorAll(`input[name="${target.name}"]`);
+    sameRow.forEach(box => {
+      if (box !== target) {
+        box.checked = false;
+      }
+    });
+  }
+});
+
+function getChecklistRows() {
+  const rows = document.querySelectorAll("#checklistBody .checklist-row");
+
+  return [...rows].map(row => {
+    const name = row.dataset.name || "";
+    const checkboxes = row.querySelectorAll('input[type="checkbox"]');
+
+    let approved = 0;
+    let rejected = 0;
+    let pending = 0;
+
+    checkboxes.forEach(box => {
+      if (!box.checked) return;
+      if (box.value === "승인") approved = 1;
+      if (box.value === "기각") rejected = 1;
+      if (box.value === "보류") pending = 1;
+    });
+
+    return {
+      name,
+      approved,
+      rejected,
+      pending
+    };
+  });
+}
+
+function makeChecklistCsv() {
+  const rows = getChecklistRows();
+
+  const lines = [
+    ["이름", "승인", "기각", "보류"].join(","),
+    ...rows.map(row => [
+      row.name,
+      row.approved,
+      row.rejected,
+      row.pending
+    ].join(","))
+  ];
+
+  return lines.join("\n");
+}
+
+function downloadCsv(filename, content) {
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+if (refreshCharactersBtn) {
+  refreshCharactersBtn.addEventListener("click", refreshCharacterChecklist);
+}
+
+if (saveChecklistBtn) {
+  saveChecklistBtn.addEventListener("click", () => {
+    const csvContent = makeChecklistCsv();
+    downloadCsv("checklist-result.csv", csvContent);
+  });
+}
